@@ -1,0 +1,32 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        ninja-build \
+        git \
+        curl \
+        ca-certificates \
+        file \
+        patchelf \
+        desktop-file-utils \
+        python3-pip \
+        qt6-base-dev \
+        qt6-base-dev-tools \
+        qt6-wayland \
+        libgl1-mesa-dev \
+        libxkbcommon-dev \
+        libvulkan-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir "cmake>=3.25"
+
+ENV APPIMAGE_EXTRACT_AND_RUN=1
+ENV QMAKE=/usr/lib/qt6/bin/qmake
+
+COPY packaging/container-entrypoint.sh /usr/local/bin/container-entrypoint.sh
+RUN chmod +x /usr/local/bin/container-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/container-entrypoint.sh"]
+CMD ["./packaging/deploy-linux.sh"]

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=OpenTM
+GenericName=PS3 Target Manager
+Comment=Manage PS3 devkits and DEX consoles over DECI3
+Exec=opentm_app
+Icon=opentm
+Terminal=false
+Categories=Development;Debugger;
+Keywords=PS3;DECI3;devkit;target;console;tm;otm
+StartupWMClass=opentm_app

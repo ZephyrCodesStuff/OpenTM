@@ -1,0 +1,22 @@
+{
+  "name": "opentm",
+  "version-string": "0.0.1",
+  "description": "Cleanroom reimplementation of the PS3 Target Manager.",
+  "$comment": [
+    ""
+  ],
+  "dependencies": [
+    {
+      "name": "qtbase",
+      "default-features": false,
+      "features": [
+        "gui",
+        "widgets",
+        "network",
+        "png"
+      ]
+    },
+    "catch2"
+  ],
+  "builtin-baseline": "ce35b1a53aac26d7fcdb8ee1ef7a8e4eea02d27b"
+}

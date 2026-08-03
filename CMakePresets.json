@@ -1,0 +1,125 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "warnings": { "uninitialized": true },
+      "errors":   { "deprecated": true }
+    },
+    {
+      "name": "base-vcpkg",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "msvc-debug",
+      "displayName": "MSVC + Ninja (Debug) - run from Developer PowerShell",
+      "inherits": "base-vcpkg",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "msvc-release",
+      "displayName": "MSVC + Ninja (Release) - run from Developer PowerShell",
+      "inherits": "base-vcpkg",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "vs2022",
+      "displayName": "Visual Studio 2022 (x64) - any shell, no Ninja needed",
+      "inherits": "base-vcpkg",
+      "generator": "Visual Studio 17 2022",
+      "architecture": { "value": "x64", "strategy": "set" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "msvc-release-prebuilt-qt",
+      "displayName": "MSVC + Ninja (Release) - Qt from CMAKE_PREFIX_PATH, no vcpkg",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "description": "For a Qt from the official installer or aqtinstall. Set CMAKE_PREFIX_PATH to e.g. C:/Qt/6.8.3/msvc2022_64. Catch2 is fetched by CMake, so vcpkg is not involved at all."
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux + Ninja (Debug) - system Qt6 (dnf install qt6-qtbase-devel), Catch2 3 fetched if absent",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux + Ninja (Release) - system Qt6, Catch2 3 fetched if absent",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "linux-debug-vcpkg",
+      "displayName": "Linux + Ninja (Debug) - vcpkg toolchain (requires VCPKG_ROOT)",
+      "inherits": "base-vcpkg",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "parallel",
+      "hidden": true,
+      "displayName": "jobs 0 = one per logical CPU; MSBuild builds one project at a time without it",
+      "jobs": 0
+    },
+    { "name": "msvc-debug",   "inherits": "parallel", "configurePreset": "msvc-debug" },
+    { "name": "msvc-release", "inherits": "parallel", "configurePreset": "msvc-release" },
+    { "name": "msvc-release-prebuilt-qt", "inherits": "parallel", "configurePreset": "msvc-release-prebuilt-qt" },
+    { "name": "vs2022-debug",   "inherits": "parallel", "configurePreset": "vs2022", "configuration": "Debug" },
+    { "name": "vs2022-release", "inherits": "parallel", "configurePreset": "vs2022", "configuration": "Release" },
+    { "name": "linux-debug",   "inherits": "parallel", "configurePreset": "linux-debug" },
+    { "name": "linux-release", "inherits": "parallel", "configurePreset": "linux-release" },
+    { "name": "linux-debug-vcpkg", "inherits": "parallel", "configurePreset": "linux-debug-vcpkg" }
+  ],
+  "testPresets": [
+    {
+      "name": "msvc-debug",
+      "configurePreset": "msvc-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "vs2022-debug",
+      "configurePreset": "vs2022",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "msvc-release-prebuilt-qt",
+      "configurePreset": "msvc-release-prebuilt-qt",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-release",
+      "configurePreset": "linux-release",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

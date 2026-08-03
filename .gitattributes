@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.bat text eol=crlf
+
+# Never touch these
+*.bmp  binary
+*.png  binary
+*.ico  binary
+*.pcap binary
+*.pcapng binary

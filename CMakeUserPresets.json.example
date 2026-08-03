@@ -1,0 +1,24 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "vs2022-local",
+      "inherits": "vs2022",
+      "environment": {
+        "VCPKG_ROOT": "C:/vcpkg"
+      }
+    },
+    {
+      "name": "msvc-debug-local",
+      "inherits": "msvc-debug",
+      "environment": {
+        "VCPKG_ROOT": "C:/vcpkg"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "vs2022-local-debug",   "configurePreset": "vs2022-local", "configuration": "Debug" },
+    { "name": "vs2022-local-release", "configurePreset": "vs2022-local", "configuration": "Release" },
+    { "name": "msvc-debug-local",     "configurePreset": "msvc-debug-local" }
+  ]
+}

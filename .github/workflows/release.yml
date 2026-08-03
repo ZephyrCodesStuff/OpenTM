@@ -1,0 +1,185 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build the release image
+        run: docker build -t opentm-build -f packaging/Containerfile .
+
+      - name: Build tarball and AppImage
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src opentm-build \
+            ./packaging/deploy-linux.sh
+          # The container writes as root; hand the artifacts back to the runner.
+          sudo chown -R "$(id -u):$(id -g)" dist
+
+      - name: Smoke-test the artifacts
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" debian:12 /bin/bash -c '
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends \
+              libegl1 libgl1 libglx0 libopengl0 libx11-6 \
+              libfontconfig1 libfreetype6 libharfbuzz0b >/dev/null
+
+            cd /tmp && tar xzf /dist/*.tar.gz && cd opentm-*/
+
+            for b in opentm_app opentm_cli opentm_server opentm_tray; do
+              if ldd "bin/$b" | grep -q "not found"; then
+                echo "FAIL: bin/$b has unresolved libraries"; ldd "bin/$b" | grep "not found"; exit 1
+              fi
+            done
+            echo "all binaries resolve"
+
+            bin/opentm_cli --help >/dev/null
+            echo "opentm_cli runs"
+
+            # 124 is timeout killing a process that was still alive, which
+            # is what a GUI that started correctly looks like.
+            QT_QPA_PLATFORM=offscreen timeout 8 bin/opentm_app >/tmp/gui.log 2>&1 || rc=$?
+            if [ "${rc:-0}" != "124" ]; then
+              echo "FAIL: opentm_app exited early (rc=${rc:-0})"; cat /tmp/gui.log; exit 1
+            fi
+            echo "opentm_app starts"
+          '
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: opentm-linux-x86_64
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: lukka/get-cmake@latest
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure
+        shell: pwsh
+        run: cmake --preset msvc-release-prebuilt-qt "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build --preset msvc-release-prebuilt-qt
+
+      - name: Unit tests
+        run: ctest --preset msvc-release-prebuilt-qt
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+              $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          } else {
+              $m = Select-String -Path CMakeLists.txt -Pattern '^\s*VERSION\s+([0-9]\S*)'
+              $version = $m.Matches[0].Groups[1].Value + '+' + (git rev-parse --short HEAD)
+          }
+          Write-Host "version $version"
+
+          # windeployqt has already populated bin/ with the Qt runtime as a
+          # post-build step, so the built tree is the shippable tree.
+          $stage = "dist/opentm-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item -Recurse -Force build/msvc-release-prebuilt-qt/bin/* $stage
+
+          # Everything lands in bin/, including things that are not part of a
+          # release.
+          foreach ($x in 'tm_core_tests.exe', 'remote_probe.exe') {
+              Remove-Item -Force (Join-Path $stage $x) -ErrorAction SilentlyContinue
+          }
+
+          foreach ($x in 'opentm_app.exe', 'opentm_cli.exe', 'opentm_server.exe', 'opentm_tray.exe') {
+              if (-not (Test-Path (Join-Path $stage $x))) { throw "missing $x" }
+          }
+          if (-not (Test-Path (Join-Path $stage 'Qt6Core.dll'))) {
+              throw "Qt runtime was not deployed into bin/"
+          }
+
+          Compress-Archive -Path $stage -DestinationPath "dist/opentm-$version-windows-x64.zip"
+
+      - name: Smoke-test the package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Expand-Archive -Path (Get-Item dist/*.zip).FullName -DestinationPath check
+          $bin = (Get-ChildItem check -Directory)[0].FullName
+          & "$bin/opentm_cli.exe" --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "opentm_cli exited $LASTEXITCODE" }
+          Write-Host "opentm_cli runs"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: opentm-windows-x64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [linux, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          find artifacts -type f ! -name SHA256SUMS -exec cp {} dist/ \;
+          cd dist && sha256sum * > SHA256SUMS
+          ls -lh
+
+      # gh release create fails outright if a release for the tag already
+      # exists - which it does if the release was drafted by hand, or if this
+      # job is being re-run after a failure. Upload into the existing one
+      # instead, so re-running is always safe.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "release ${GITHUB_REF_NAME} exists - uploading into it"
+            gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+          else
+            echo "creating release ${GITHUB_REF_NAME}"
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "OpenTM ${GITHUB_REF_NAME}" \
+              --generate-notes \
+              dist/*
+          fi
