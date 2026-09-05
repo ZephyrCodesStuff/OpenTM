@@ -192,10 +192,32 @@ void remote_session::send(const QString& method, QJsonObject params) {
 void remote_session::set_target(const target_record& r) {
     record_ = r;
     handle_ = r.id.isEmpty() ? (r.name.isEmpty() ? QStringLiteral("%1:%2").arg(r.host).arg(r.port) : r.name) : r.id;
+    peer_ = QStringLiteral("%1:%2").arg(r.host).arg(r.port);
+    open_state_ = open_state::pending;
+    open_error_.clear();
     // the whole record goes over: the server drives resets, WoL and file
     // serving from its own copy, so a partial one silently loses those settings
-    send(QStringLiteral("target.open"), {{"record", target_record_to_json(r)}});
-    refresh_status();
+    rpc_.call(QStringLiteral("target.open"), {{"record", target_record_to_json(r)}},
+              [this](bool ok, const QJsonObject&, const QString& err) {
+        if (!ok) {
+            open_state_ = open_state::failed;
+            open_error_ = err;
+            emit error(QStringLiteral("target.open: %1").arg(err));
+            if (connect_when_open_) {
+                connect_when_open_ = false;
+                connected_ = false;
+                state_     = opentm::tm_core::tcp_connection::state::disconnected;
+                emit connection_state_changed(state_);
+            }
+            return;
+        }
+        open_state_ = open_state::ok;
+        refresh_status();
+        if (connect_when_open_) {
+            connect_when_open_ = false;
+            send_connect();
+        }
+    });
 }
 
 void remote_session::clear_target() {
@@ -210,6 +232,21 @@ void remote_session::set_file_serving_dir(const QString& dir) {
 }
 
 void remote_session::connect_to_target() {
+    if (open_state_ == open_state::pending) {
+        connect_when_open_ = true;
+        connected_ = true;
+        state_     = opentm::tm_core::tcp_connection::state::tcp_connecting;
+        emit connection_state_changed(state_);
+        return;
+    }
+    if (open_state_ == open_state::failed) {
+        emit error(QStringLiteral("this target could not be opened on the session server (%1), so there is nothing to connect").arg(open_error_));
+        return;
+    }
+    send_connect();
+}
+
+void remote_session::send_connect() {
     connected_ = true;
     state_     = opentm::tm_core::tcp_connection::state::tcp_connecting;
     rpc_.call(QStringLiteral("target.connect"), {{"target", handle_}}, [this](bool ok, const QJsonObject& r, const QString& err) {

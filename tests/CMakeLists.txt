@@ -13,6 +13,7 @@ add_executable(tm_core_tests
     test_cp_client.cpp
     test_dcmp_codec.cpp
     test_host_path_policy.cpp
+    test_remote_session.cpp
     ${CMAKE_SOURCE_DIR}/src/tm_ui/target_properties_xml.cpp
     test_target_properties_xml.cpp
     test_icons_resource.cpp
@@ -26,6 +27,7 @@ target_link_libraries(tm_core_tests PRIVATE
     tm_session
     Qt6::Core
     Qt6::Gui
+    Qt6::Network
     Catch2::Catch2WithMain
 )
 

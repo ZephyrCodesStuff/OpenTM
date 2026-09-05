@@ -75,6 +75,7 @@ signals:
 
 private:
     void wire_events();
+    void send_connect();
     void refresh_status();
     void adopt_state(const QJsonObject& r);
     void send(const QString& method, QJsonObject params = {});
@@ -83,6 +84,11 @@ private:
     rpc_client    rpc_;
     target_record record_;
     QString       handle_;   // server-side session key, stable across renames
+
+    enum class open_state { none, pending, ok, failed };
+    open_state    open_state_ = open_state::none;
+    bool          connect_when_open_ = false;
+    QString       open_error_;
     bool          connected_     = false;
     bool          session_ready_ = false;
     QString       peer_;

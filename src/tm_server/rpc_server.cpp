@@ -150,25 +150,26 @@ rpc_server::managed* rpc_server::open_target(const QJsonObject& p, QString& err)
 
     if (auto it = sessions_.constFind(handle); it != sessions_.constEnd()) {
         auto* have_m = *it;
-        const auto& have = have_m->session->target();
+        const auto have = have_m->session->target();
         if (have.host != r.host || have.port != r.port || have.type != r.type) {
-            err = QStringLiteral("target '%1' is already open on %2:%3").arg(have_m->name, have.host).arg(have.port);
-            return nullptr;
+            emit log_message(QStringLiteral("target '%1' moved from %2:%3 to %4:%5, reopening").arg(have_m->name, have.host).arg(have.port).arg(r.host).arg(r.port));
+            close_target(handle);
+        } else {
+            if (p.contains("record")) {
+                // re opening with a full record is how the GUI pushes edited
+                // properties (reset mode, MAC, timeouts) into a live session
+                have_m->session->set_target(r);
+            } else if (!r.file_server_dir.isEmpty() && r.file_server_dir != have.file_server_dir) {
+                have_m->session->set_file_serving_dir(r.file_server_dir);
+            }
+            if (have_m->name != r.name) {
+                const auto was = have_m->name;
+                have_m->name = r.name;
+                emit log_message(QStringLiteral("target '%1' renamed to '%2'").arg(was, r.name));
+                broadcast_event(handle, QStringLiteral("target_renamed"), {{"name", r.name}});
+            }
+            return have_m;
         }
-        if (p.contains("record")) {
-            // re opening with a full record is how the GUI pushes edited
-            // properties (reset mode, MAC, timeouts) into a live session
-            have_m->session->set_target(r);
-        } else if (!r.file_server_dir.isEmpty() && r.file_server_dir != have.file_server_dir) {
-            have_m->session->set_file_serving_dir(r.file_server_dir);
-        }
-        if (have_m->name != r.name) {
-            const auto was = have_m->name;
-            have_m->name = r.name;
-            emit log_message(QStringLiteral("target '%1' renamed to '%2'").arg(was, r.name));
-            broadcast_event(handle, QStringLiteral("target_renamed"), {{"name", r.name}});
-        }
-        return have_m;
     }
 
     auto* m = new managed;
