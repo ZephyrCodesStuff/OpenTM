@@ -20,8 +20,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: docker/setup-buildx-action@v3
       - name: Build the release image
-        run: docker build -t opentm-build -f packaging/Containerfile .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/Containerfile
+          tags: opentm-build
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build tarball and AppImage
         run: |
