@@ -5,6 +5,8 @@
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QEventLoop>
+#include <QHostAddress>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
@@ -88,6 +90,7 @@ void ensure_app() {
     static char  name[] = "tm_core_tests";
     static char* argv[] = {name, nullptr};
     new QCoreApplication(argc, argv);
+}
 
 void pump(int ms) {
     QElapsedTimer t;
