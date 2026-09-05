@@ -30,6 +30,9 @@ jobs:
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+          DOCKER_BUILD_SUMMARY: false
 
       - name: Build tarball and AppImage
         run: |
@@ -165,6 +168,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: opentm-*
 
       - name: Collect artifacts
         run: |
